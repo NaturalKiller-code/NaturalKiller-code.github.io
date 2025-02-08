@@ -1,0 +1,171 @@
+---
+title: "Algoritmo Metropolis"
+output: html_notebook
+---
+
+# Introducción
+
+El algoritmo de **Metropolis** es un método de simulación utilizado para generar muestras de una distribución de probabilidad, que puede ser difícil de obtener directamente, pero cuyo kernel tiene forma es conocida o, al menos, puede ser evaluado numéricamente. Es un caso particular de los **métodos Markov Chain Monte Carlo (MCMC)**, que construye una cadena de Markov cuya distribución de probabilidad converge a la distribución deseada a medida que se realizan suficientes pasos.
+
+## Idea básica del algoritmo Metropolis
+
+La idea es generar una secuencia de estados o configuraciones, de manera que las probabilidades de transición entre estados estén determinadas por una distribución de probabilidad objetivo $\pi(x)$. El algoritmo se basa en aceptar o rechazar propuestas de nuevos estados en función de la probabilidad relativa de esos estados con respecto al estado actual.
+
+Aquí están los pasos detallados:
+
+### 1. Estado inicial
+
+Se elige un punto inicial $x_0$ en el espacio de estados. Este punto puede ser elegido aleatoriamente o basado en alguna heurística, dependiendo de la distribución que se quiera simular.
+
+### 2. Generar una propuesta
+
+En cada paso $i$, dado el estado actual $x_i$, se genera una nueva propuesta $y$, generalmente a través de un proceso de perturbación aleatoria. Por ejemplo, $y = x_i + \epsilon$, donde $\epsilon$ es un valor aleatorio que depende de una distribución de probabilidad (por ejemplo, una distribución normal).
+
+### 3. Evaluar la probabilidad
+
+Se calcula la razón de las probabilidades entre el estado propuesto $y$ y el estado actual $x_i$, usando la distribución objetivo $\pi(x)$:
+
+$$
+r = \frac{\pi(y)}{\pi(x_i)}
+$$
+
+La razón $r$ indica que tan plausible es el nuevo estado en comparación con el estado actual.
+
+### 4. Decisión de aceptación o rechazo
+
+El nuevo estado $y$ se acepta con una probabilidad $\alpha = \min(1, r)$. Esto significa que:
+
+-   Si $r \geq 1$ (es decir, si $\pi(y) \geq \pi(x_i)$), entonces $\alpha = 1$ y se acepta el nuevo estado $y$ sin dudar.
+-   Si $r < 1$, entonces $\alpha = r$ y se acepta el nuevo estado $y$ con probabilidad $\alpha$, mientras que, con probabilidad $1 - \alpha$, se rechaza el nuevo estado y se mantiene el estado actual $x_i$.
+
+En resumen, el nuevo estado se acepta con una probabilidad determinada por $r$, lo que asegura que el proceso tiene la tendencia a moverse hacia los estados con mayor probabilidad bajo la distribución objetivo, pero también permite explorar regiones con menor probabilidad, lo cual es importante para evitar quedarse atrapado en un mínimo local.
+
+### 5. Repetir
+
+Este proceso se repite para un número grande de iteraciones, generando una secuencia de estados $\{x_0, x_1, x_2, \dots\}$. A medida que se realizan más pasos, la cadena de Markov converge a la distribución objetivo $\pi(x)$, y las muestras generadas pueden ser utilizadas para estimar características de esa distribución (por ejemplo, su media, varianza, etc.).
+
+### 6. Propiedades del algoritmo Metropolis
+
+-   El algoritmo garantiza que la cadena de Markov converge a la distribución $\pi(x)$ si se cumplen ciertas condiciones, como la irreducibilidad y la aperiodicidad del proceso.
+-   A medida que aumenta el número de pasos, la secuencia de muestras se convierte en una representación adecuada de la distribución deseada, siempre que la propuesta no esté demasiado sesgada y que el número de pasos sea suficientemente grande.
+
+## Variantes del algoritmo Metropolis
+
+El algoritmo Metropolis se puede generalizar en diferentes formas, como el **algoritmo Metropolis-Hastings**, que es más general y permite usar una distribución de propuesta arbitraria para generar las muestras. El algoritmo Metropolis es un caso especial de Metropolis-Hastings donde la distribución de propuesta es simétrica, es decir, $q(y | x) = q(x | y)$.
+
+## Aplicaciones
+
+El algoritmo Metropolis (y sus variantes) se utiliza en una variedad de campos, como:
+
+-   **Simulación de sistemas físicos**: En física estadística, por ejemplo, para modelar el comportamiento de partículas en un sistema.
+-   **Inferencia estadística**: En la estimación de parámetros en modelos estadísticos complejos.
+-   **Optimización**: En el contexto de optimización global, como en el algoritmo de recocido simulado.
+
+## Resumen de los pasos del algoritmo Metropolis:
+
+1.  Elige un estado inicial $x_0$.
+2.  Para cada iteración:
+    -   Proponer un nuevo estado $y$.
+    -   Calcular la probabilidad de aceptación $r = \frac{\pi(y)}{\pi(x_i)}$.
+    -   Aceptar $y$ con probabilidad $\alpha = \min(1, r)$.
+3.  Repetir durante suficientes iteraciones.
+
+Este algoritmo permite obtener muestras de una distribución $\pi(x)$ incluso cuando no se conoce la constante de normalización.
+
+# Ejemplo: distribución exponencial
+
+Supona que se desea simular de una distribución exponencial de parámetro de escala $\lambda = 5$. El kernel de la función de densidad está dado por $$ k(x) = e^{-x/\lambda}.
+$$ La siguiente gráfica muestra la función de densidad de esta distribución.
+
+```{r}
+rm(list = ls())
+l = 5
+x = seq(0, 50, length.out = 1000)
+fx = dexp(x, rate = 1/l)
+plot(x, fx, type = "l", col = "dodgerblue", lwd = 2, xlab = "x", ylab = "f(x)",
+     main = "Función de densidad exponencial")
+```
+
+El cuantil de nivel 0.999 de esta distribución es aproximadamente 34.5, lo cual implica que el 99.9% de las simulaciones de esta distribución deberían estar entre 0 y 34.5. Se desea generar estas simulaciones utilizando un algoritmo Metropolis usando una propuesta uniforme. El código se muestra abajo. Comenzamos generando un punto inicial al azar en el intervalo (0, 100) y un total de 1000 iteraciones.
+
+```{r}
+# Kernel de la función de densidad exponencial. Recordar que los posibles valores de una variable exponencial deben ser positivos
+k <- function(x, scale = 5)
+{ if(x > 0)
+    return(exp(-x/scale))
+  else
+    return(0)
+}
+
+m = 1000 # número de iteraciones
+X = rep(0, m) # vector en el que se guardan las iteraciones
+set.seed(1984) # fijar generador aleatorio
+X[1] = runif(1, 0, 100) # valor inicial
+
+# Proceso iterativo
+for (i in 2:m)
+  { y = X[i-1] + runif(1, -4, 4) # propuesta
+    alpha = min(1, k(y)/k(X[i-1])) # prob. de aceptación
+    if(runif(1) <= alpha)
+      X[i] = y # aceptación
+    else
+      X[i] = X[i-1] # rechazo
+}
+```
+
+La siguiente gráfica muestra las simulaciones que se generan.
+
+```{r}
+plot(X, type ="l", col = "dodgerblue", lwd = 2, xlab = "iteraciones",
+     ylab = "x", main = "Simulaciones con el algoritmo Metropolis")
+```
+
+Puede verse que, después de 300 iteraciones, aproximadamente, la secuencia de valores se estabiliza. Tomamos el periodo de calentamiento como $\tau = 300$. Las muestras que se generan estan correlacionadas debido a la construcción de las propuestas. Para evaluar la correlación de la serie calculamos la autocorrelación. La siguiente gráfica muestra la correlación.
+
+```{r}
+burnin = 300
+acf(X[burnin:m], main = "Autocorrelación de la cadena")
+```
+
+La gráfica muestra que, después de 15 iteraciones, la correlación entre las simulaciones se vuelve muy pequeña. Esto indica que, si se toma una submuestra cada 15 iteraciones, las muestras resultantes son pseudo-independientes. La siguiente gráfica muestra la autocorrelación después del submuestreo con lag = 15.
+
+```{r}
+lag = 15
+X_final = X[seq(burnin, m, lag)]
+acf(X_final, main = "Autocorrelación de la sub-muestra")
+```
+
+Así, para obtener una muestra peudo-independiente de tamaño 1000 de la distribución exponencial con parámetro de escala $\lambda = 5$, es necesario generar unas 15300 iteraciones del algoritmo Metropolis. Esto resulta del siguiente cálculo: $$burnin + lag*1000 = 300 + 15*1000 = 15300. 
+$$ La siguiente gráfica muestra el histograma que se obtiene con la muestra de tamaño 1000 y la función de densidad verdadera. Puede verse que la aproximación a la función de densidad es muy buena.
+
+```{r}
+m = 15500 # número de iteraciones
+X = rep(0, m) # vector en el que se guardan las iteraciones
+set.seed(1984) # fijar generador aleatorio
+X[1] = runif(1, 0, 100) # valor inicial
+
+# Proceso iterativo
+for (i in 2:m)
+  { y = X[i-1] + runif(1, -4, 4) # propuesta
+    alpha = min(1, k(y)/k(X[i-1])) # prob. de aceptación
+    if(runif(1) <= alpha)
+      X[i] = y # aceptación
+    else
+      X[i] = X[ia-1] # rechazo
+}
+burnin = 300
+lag = 15
+X_final = X[seq(burnin, m, lag)]
+hist(X_final, probability = TRUE, xlab = "x", ylab = "f(x)", main = "Aproximación a la función de densidad")
+lines(x,fx, col = "dodgerblue", lwd = 2)
+```
+
+Para tener una mejor idea de que tan bien se puede aproximar la distribución a través de las simulaciones, calculamos los cuantes de nivel 0.05, 0.25, 0.5, 0.75 y 0.95 de la distribución objetivo exponencial, tanto de forma teórica como de forma aproximada a través de las muestras obtenidas. Los resultados se muestran abajo.
+
+```{r}
+q = c(0.05, 0.25, 0.5, 0.75, 0.95)
+round(qexp(q, 1/l), 2)
+round(quantile(X_final, q), 2)
+```
+
+Esto muestra que las estimaciones obtenidas mediante la muestra son muy razonables. Si se requiere mayor precisión, basta con aumentar el número de simulaciones.

@@ -1,0 +1,11 @@
+---
+title: "Variant_calling_and_Ensembl_VEP_exercises_Emiliano_Ferro"
+author: "F-Rodriguez Emiliano"
+date: "2025-02-05"
+output: html_document
+---
+
+
+# Understanding our data
+
+
